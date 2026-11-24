@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Jupyter
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# Model checkpoints (keep small test/best checkpoints or ignore raw heavy weights if over 50MB)
+*.pt
+*.pth
+outputs/checkpoints/*.pt
+!outputs/checkpoints/.gitkeep
+
+# Cache / Temp
+.cache/
+.pytest_cache/
+*.log
+test_train.en

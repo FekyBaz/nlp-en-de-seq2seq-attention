@@ -1,0 +1,53 @@
+{
+  "Short (3-6 words)": {
+    "count": 5,
+    "Baseline": {
+      "BLEU-1": 51.28,
+      "BLEU-2": 32.49,
+      "BLEU-3": 24.42,
+      "BLEU-4": 15.69,
+      "ROUGE-L": 63.73
+    },
+    "Attention": {
+      "BLEU-1": 61.76,
+      "BLEU-2": 46.15,
+      "BLEU-3": 35.4,
+      "BLEU-4": 26.14,
+      "ROUGE-L": 66.61
+    }
+  },
+  "Medium (7-11 words)": {
+    "count": 220,
+    "Baseline": {
+      "BLEU-1": 39.49,
+      "BLEU-2": 25.15,
+      "BLEU-3": 16.67,
+      "BLEU-4": 10.75,
+      "ROUGE-L": 42.34
+    },
+    "Attention": {
+      "BLEU-1": 51.75,
+      "BLEU-2": 37.34,
+      "BLEU-3": 27.61,
+      "BLEU-4": 20.51,
+      "ROUGE-L": 54.01
+    }
+  },
+  "Long (12-18+ words)": {
+    "count": 275,
+    "Baseline": {
+      "BLEU-1": 31.14,
+      "BLEU-2": 18.3,
+      "BLEU-3": 11.57,
+      "BLEU-4": 7.28,
+      "ROUGE-L": 34.92
+    },
+    "Attention": {
+      "BLEU-1": 39.93,
+      "BLEU-2": 26.88,
+      "BLEU-3": 18.76,
+      "BLEU-4": 13.0,
+      "ROUGE-L": 45.52
+    }
+  }
+}
