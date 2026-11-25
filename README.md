@@ -6,7 +6,8 @@
 
 > **Assignment 3: Neural Machine Translation with LSTM and Attention Mechanisms**  
 > *Natural Language Processing — Fall 2026, Alexandria National University*  
-> **Author**: Mohamed Baz ([@FekyBaz](https://github.com/FekyBaz))
+> **Student Name:** Mohamed Soliman Elfeky | **Student ID:** 2305467  
+> **GitHub:** [@FekyBaz](https://github.com/FekyBaz) / [nlp-en-de-seq2seq-attention](https://github.com/FekyBaz/nlp-en-de-seq2seq-attention)
 
 ---
 

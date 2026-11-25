@@ -151,7 +151,7 @@ class AttentionDecoder(nn.Module):
         # Linear projection to target vocabulary from [decoder_hidden; context_vector; embedded_token]
         self.fc_out = nn.Linear(dec_hid_dim + (enc_hid_dim * 2) + emb_dim, vocab_size)
 
-    def forward(
+    def decode_step(
         self,
         input_token: torch.Tensor,
         decoder_hidden: torch.Tensor,
@@ -160,18 +160,12 @@ class AttentionDecoder(nn.Module):
         mask: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """
-        Single decoding step.
-        Args:
-            input_token: [batch_size]
-            decoder_hidden: [batch_size, dec_hid_dim] (s_{t-1})
-            decoder_cell: [batch_size, dec_hid_dim] (c_{t-1})
-            encoder_outputs: [batch_size, src_len, enc_hid_dim * 2]
-            mask: [batch_size, src_len]
-        Returns:
-            prediction: [batch_size, vocab_size]
-            new_hidden: [batch_size, dec_hid_dim]
-            new_cell: [batch_size, dec_hid_dim]
-            attention_weights: [batch_size, src_len]
+        Single decoding step:
+        1. Embeds input token
+        2. Computes dynamic attention weights over encoder outputs
+        3. Forms weighted context vector
+        4. Concatenates [embedded, context] into decoder LSTMCell
+        5. Concatenates [decoder_hidden, context, embedded] before linear projection
         """
         # input_token: [batch_size] -> [batch_size, 1] -> [batch_size, emb_dim]
         embedded = self.dropout(self.embedding(input_token.unsqueeze(1))).squeeze(1)
@@ -180,20 +174,27 @@ class AttentionDecoder(nn.Module):
         attn_weights = self.attention(decoder_hidden, encoder_outputs, mask)
 
         # Compute context vector: [batch_size, enc_hid_dim * 2]
-        # attn_weights.unsqueeze(1): [batch_size, 1, src_len]
-        # encoder_outputs: [batch_size, src_len, enc_hid_dim * 2]
-        # bmm gives [batch_size, 1, enc_hid_dim * 2] -> squeeze(1)
         context = torch.bmm(attn_weights.unsqueeze(1), encoder_outputs).squeeze(1)
 
-        # Feed [embedded; context] into LSTMCell
+        # Concatenate [embedded, context] and feed into LSTMCell
         lstm_input = torch.cat((embedded, context), dim=1)
         new_hidden, new_cell = self.lstm_cell(lstm_input, (decoder_hidden, decoder_cell))
 
-        # Output prediction from [new_hidden; context; embedded]
+        # Output prediction from concatenated representation [new_hidden, context, embedded]
         output_repr = torch.cat((new_hidden, context, embedded), dim=1)
         prediction = self.fc_out(self.dropout(output_repr))
 
         return prediction, new_hidden, new_cell, attn_weights
+
+    def forward(
+        self,
+        input_token: torch.Tensor,
+        decoder_hidden: torch.Tensor,
+        decoder_cell: torch.Tensor,
+        encoder_outputs: torch.Tensor,
+        mask: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        return self.decode_step(input_token, decoder_hidden, decoder_cell, encoder_outputs, mask)
 
 
 class Seq2SeqAttention(nn.Module):
@@ -219,6 +220,25 @@ class Seq2SeqAttention(nn.Module):
         """Create mask tensor where True indicates padding."""
         return (src == self.pad_idx)
 
+    def encode(
+        self, src: torch.Tensor, src_lens: Optional[torch.Tensor] = None
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Encode source sequence with bidirectional LSTM."""
+        return self.encoder(src, src_lens)
+
+    def decode_step(
+        self,
+        input_token: torch.Tensor,
+        decoder_hidden: torch.Tensor,
+        decoder_cell: torch.Tensor,
+        encoder_outputs: torch.Tensor,
+        mask: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Step attention decoder with dynamic context alignment."""
+        return self.decoder.decode_step(
+            input_token, decoder_hidden, decoder_cell, encoder_outputs, mask
+        )
+
     def forward(
         self,
         src: torch.Tensor,
@@ -227,6 +247,7 @@ class Seq2SeqAttention(nn.Module):
         teacher_forcing_ratio: float = 0.5,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
+        Full forward pass with Bahdanau attention and scheduled teacher forcing.
         Args:
             src: [batch_size, src_len]
             trg: [batch_size, trg_len]
@@ -244,15 +265,16 @@ class Seq2SeqAttention(nn.Module):
         outputs = torch.zeros(batch_size, trg_len, trg_vocab_size, device=self.device)
         attentions = torch.zeros(batch_size, trg_len - 1, src_len, device=self.device)
 
-        # Encode
-        encoder_outputs, hidden, cell = self.encoder(src, src_lens)
+        # 1. Encode source tokens into bidirectional annotations
+        encoder_outputs, hidden, cell = self.encode(src, src_lens)
         mask = self.create_mask(src)
 
-        # First decoder input is <sos> token
+        # 2. First decoder input is always <sos> token
         input_token = trg[:, 0]
 
+        # 3. Autoregressive decoding with dynamic attention alignment
         for t in range(1, trg_len):
-            prediction, hidden, cell, attn_weights = self.decoder(
+            prediction, hidden, cell, attn_weights = self.decode_step(
                 input_token, hidden, cell, encoder_outputs, mask
             )
             outputs[:, t, :] = prediction

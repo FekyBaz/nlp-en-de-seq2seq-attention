@@ -94,21 +94,14 @@ class BaselineDecoder(nn.Module):
         )
         self.fc_out = nn.Linear(hid_dim, vocab_size)
 
-    def forward(
+    def decode_step(
         self,
         input_token: torch.Tensor,
         hidden: torch.Tensor,
         cell: torch.Tensor,
     ) -> Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         """
-        Single decoding step.
-        Args:
-            input_token: [batch_size] (current token indices)
-            hidden: [n_layers, batch_size, hid_dim]
-            cell: [n_layers, batch_size, hid_dim]
-        Returns:
-            prediction: [batch_size, vocab_size]
-            (hidden, cell): updated hidden and cell states
+        Single decoding step: embeds token, steps LSTM, projects to vocabulary.
         """
         # input_token: [batch_size] -> [batch_size, 1]
         input_token = input_token.unsqueeze(1)
@@ -119,6 +112,14 @@ class BaselineDecoder(nn.Module):
         prediction = self.fc_out(output.squeeze(1))  # [batch_size, vocab_size]
 
         return prediction, (hidden, cell)
+
+    def forward(
+        self,
+        input_token: torch.Tensor,
+        hidden: torch.Tensor,
+        cell: torch.Tensor,
+    ) -> Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+        return self.decode_step(input_token, hidden, cell)
 
 
 class Seq2SeqBaseline(nn.Module):
@@ -133,6 +134,18 @@ class Seq2SeqBaseline(nn.Module):
         self.decoder = decoder
         self.device = device
 
+    def encode(
+        self, src: torch.Tensor, src_lens: Optional[torch.Tensor] = None
+    ) -> Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+        """Encode source sequence into context vector (hidden, cell)."""
+        return self.encoder(src, src_lens)
+
+    def decode_step(
+        self, input_token: torch.Tensor, hidden: torch.Tensor, cell: torch.Tensor
+    ) -> Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+        """Step decoder autoregressively given previous token and recurrent state."""
+        return self.decoder.decode_step(input_token, hidden, cell)
+
     def forward(
         self,
         src: torch.Tensor,
@@ -141,6 +154,7 @@ class Seq2SeqBaseline(nn.Module):
         teacher_forcing_ratio: float = 0.5,
     ) -> torch.Tensor:
         """
+        Full forward pass with scheduled teacher forcing.
         Args:
             src: [batch_size, src_len]
             trg: [batch_size, trg_len]
@@ -156,14 +170,15 @@ class Seq2SeqBaseline(nn.Module):
         # Tensor to store decoder outputs
         outputs = torch.zeros(batch_size, trg_len, trg_vocab_size, device=self.device)
 
-        # Encode source sequence into context vector (hidden, cell)
-        _, (hidden, cell) = self.encoder(src, src_lens)
+        # 1. Encode source sequence into fixed-length context vector (hidden, cell)
+        _, (hidden, cell) = self.encode(src, src_lens)
 
-        # First input to the decoder is always <sos> token
+        # 2. First input to the decoder is always <sos> token
         input_token = trg[:, 0]
 
+        # 3. Autoregressive decoding across time steps
         for t in range(1, trg_len):
-            prediction, (hidden, cell) = self.decoder(input_token, hidden, cell)
+            prediction, (hidden, cell) = self.decode_step(input_token, hidden, cell)
             outputs[:, t, :] = prediction
 
             # Teacher forcing decision
