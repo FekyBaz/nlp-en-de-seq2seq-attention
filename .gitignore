@@ -33,6 +33,12 @@ wheels/
 outputs/checkpoints/*.pt
 !outputs/checkpoints/.gitkeep
 
+# Helper & build automation scripts
+build_notebook.py
+execute_notebook.py
+compile_pdf_report.py
+Assignment 3_NLP_ANU.pdf
+
 # Cache / Temp
 .cache/
 .pytest_cache/
